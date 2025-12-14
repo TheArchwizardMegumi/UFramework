@@ -1,0 +1,29 @@
+1.在Customization\EventCode.cs 中添加事件码（也就是事件的名称）
+2.在需要挂载监听器的地方调用UEvent.AddListener(eventCode, callback);  //eventCode: 事件码  callback: 回调方法
+3.在需要触发此事件的地方调用Uevent.Broadcast(eventCode);
+
+例:
+
+原本耦合度较高的代码
+
+private void LevelComplete()
+{
+	completeAudioSource.Play(); //播放通关音效
+	Player.Upgrade(); //玩家章末升级
+	MapManager.SwitchLevel(); //切换关卡
+}
+
+解耦后
+
+在EventCode中添加一个叫做LevelComplete的事件码，该事件将在通关时触发。
+
+在AudioManager类、Player类、MapManager类的Start()消息中调用UEvent.AddListener("LevelComplete", XXX);  //XXX: 对应的回调方法
+
+private void LevelComplete()
+{
+	Uevent.Broadcast("LevelComplete");
+}
+
+注意，单个事件中回调的执行顺序是不确定的（实际上应该是添加监听器的顺序，但是请不要依赖添加监听器顺序的方法试图控制回调的执行顺序），
+若要使得回调按照期望的顺序执行，一种解决方案是区分事件的先后顺序，如上面的例子中，可以将这个事件拆分为OnLevelComplete以及OnLevelCompleted，
+并分别挂载对应时机调用的回调。
