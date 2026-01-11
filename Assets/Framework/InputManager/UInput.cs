@@ -1,14 +1,14 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using static UFramework.KeySet;
 
 namespace UFramework
 {
-    public static class InputManager
+    public static class UInput
     {
         private static readonly Dictionary<KeyName, bool> allowInput;
-        static InputManager()
+        static UInput()
         {
             allowInput = new Dictionary<KeyName, bool>();
             foreach (var key in AllKeys)
