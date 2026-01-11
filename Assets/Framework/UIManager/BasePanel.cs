@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class UIPanelBase : MonoBehaviour
+namespace UFramework
 {
-
+    public class BasePanel : MonoBehaviour
+    {
+    }
 }

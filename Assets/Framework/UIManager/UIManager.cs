@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class UIManager : Singleton<UIManager>
+namespace UFramework
 {
+    public class UIManager : Singleton<UIManager>
+    {
+    }
 }
