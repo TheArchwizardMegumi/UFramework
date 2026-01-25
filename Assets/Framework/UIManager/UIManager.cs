@@ -21,11 +21,11 @@ namespace UFramework
         /// <summary>
         /// 管理单例面板，储存面板类型到已加载单例面板对象的映射
         /// </summary>
-        private Dictionary<UIPanelType, BasePanel> singletonPanelDict = new();
+        private readonly Dictionary<UIPanelType, BasePanel> singletonPanelDict = new();
         /// <summary>
         /// 管理多例面板，储存面板ID到已加载多例面板的映射
         /// </summary>
-        private Dictionary<PanelID, BasePanel> multiplePanelDict = new();
+        private readonly Dictionary<PanelID, BasePanel> multiplePanelDict = new();
 
         #region 私有面板管理方法
         private BasePanel CreatePanel(UIPanelType panelType, PanelID panelID)
