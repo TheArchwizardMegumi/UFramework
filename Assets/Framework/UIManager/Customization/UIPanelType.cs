@@ -8,6 +8,6 @@ namespace UFramework
     public enum UIPanelType
     {
         //template
-        SettingPanel
+        SettingPanel,
     }
 }

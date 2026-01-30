@@ -47,6 +47,7 @@ namespace UFramework
             if (panels.Contains(panel))
                 panels.Remove(panel);
             panels.Add(panel);
+            panel.transform.SetParent(transform, false);
 
             panel.group = this;
             needsUpdateOrder = true;
