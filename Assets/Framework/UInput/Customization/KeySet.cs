@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using static UFramework.KeyName;
@@ -31,6 +31,8 @@ namespace UFramework
                 {left, A },
                 {right, D },
                 {interact, E },
+                // Camera keys
+                {cameraPan, Mouse2 },
             };
         }
     }
@@ -41,5 +43,6 @@ namespace UFramework
         left,
         right,
         interact,
+        cameraPan,
     }
 }

@@ -78,7 +78,7 @@ namespace UFramework
             string url = Application.streamingAssetsPath + "/" + assetPath;
             UnityWebRequest request = UnityWebRequest.Get(url);
             yield return request.SendWebRequest();
-            if (!request.isNetworkError)
+            if (!(request.result == UnityWebRequest.Result.ConnectionError))
             {
                 callBack(assetPath, request.downloadHandler.data);
             }

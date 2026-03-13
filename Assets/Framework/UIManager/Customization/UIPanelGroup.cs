@@ -1,8 +1,5 @@
 ﻿using Cysharp.Threading.Tasks;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace UFramework
@@ -55,10 +52,6 @@ namespace UFramework
 
             if (isShow)
                 await panel.Show();
-            if (!panel.gameObject.activeSelf)
-            {
-                Debug.LogWarning($"面板 {panel} 显示后仍为inactive状态");
-            }
         }
         /// <summary>
         /// 隐藏指定面板
@@ -68,11 +61,6 @@ namespace UFramework
             if (panels.Contains(panel))
             {
                 await panel.Hide();
-                if (panel.gameObject.activeSelf)
-                {
-                    Debug.LogWarning($"面板 {panel} 隐藏后仍为active状态");
-                    panel.gameObject.SetActive(false);
-                }
             }
             else
             {

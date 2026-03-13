@@ -8,19 +8,29 @@ namespace UFramework
 {
     public abstract class BasePanel : MonoBehaviour
     {
+        [HideInInspector]
         public UIPanelGroup group;
         public PanelID ID;
         public async virtual UniTask Show()
         {
+            if (!gameObject.activeSelf)
+            {
+                gameObject.SetActive(true);
+            }
             UEvent.Broadcast(EventCode.ShowPanel, this);
         }
         public async virtual UniTask Hide()
         {
+            if (gameObject.activeSelf)
+            {
+                gameObject.SetActive(false);
+            }
             UEvent.Broadcast(EventCode.HidePanel, this);
         }
         public virtual void Destroy()
         {
             UEvent.Broadcast(EventCode.DestroyPanel, this);
+            Destroy(gameObject);
         }
         public virtual void Pause()
         {
@@ -47,4 +57,5 @@ namespace UFramework
         public override int GetHashCode() => HashCode.Combine(Type, InstanceID);
         public override string ToString() => $"{Type}_{InstanceID}";
     }
+    public interface IPauseGamePanel { }
 }
