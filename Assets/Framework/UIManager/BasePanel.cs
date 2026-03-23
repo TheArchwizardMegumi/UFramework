@@ -11,21 +11,23 @@ namespace UFramework
         [HideInInspector]
         public UIPanelGroup group;
         public PanelID ID;
-        public async virtual UniTask Show()
+        public virtual UniTask Show()
         {
             if (!gameObject.activeSelf)
             {
                 gameObject.SetActive(true);
             }
             UEvent.Broadcast(EventCode.ShowPanel, this);
+            return UniTask.CompletedTask;
         }
-        public async virtual UniTask Hide()
+        public virtual UniTask Hide()
         {
             if (gameObject.activeSelf)
             {
                 gameObject.SetActive(false);
             }
             UEvent.Broadcast(EventCode.HidePanel, this);
+            return UniTask.CompletedTask;
         }
         public virtual void Destroy()
         {

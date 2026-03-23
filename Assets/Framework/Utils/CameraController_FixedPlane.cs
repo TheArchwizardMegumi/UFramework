@@ -1,27 +1,40 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using DG.Tweening;
 
 namespace UFramework
 {
     [RequireComponent(typeof(Camera))]
     public class CameraController_FixedPlane : MonoBehaviour
     {
-        private Tween _cameraTween;  // 相机动画 Tween
-
         [Header("平移设置")]
-        [SerializeField] private float panSpeed = 1f;           // 平移速度（1.0 = 滑动屏幕像素比例等于视野移动比例）
-        [SerializeField] private float panDamping = 5f;         // 平移阻尼（惯性），值越小惯性越大
-        [SerializeField] private float panThreshold = 0.3f;     // 滑动判定阈值（屏幕百分比），低于此值认为是点击
+        [Tooltip("平移速度系数：0.5 = 物体完全跟随指针移动，值越大移动越快")]
+        [SerializeField] private float panSpeed = 0.5f;
+        
+        [Tooltip("平移阻尼值（惯性）：值越大惯性越小，建议范围 3-10")]
+        [SerializeField] private float panDamping = 5f;
+        
+        [Tooltip("点击判定阈值（屏幕百分比）：低于此值的移动被视为点击而非拖动，2% = 约10-20像素")]
+        [SerializeField] private float panThreshold = 0.02f;
 
         [Header("缩放设置")]
-        [SerializeField] private float zoomSpeed = 0.5f;       // 缩放速度
-        [SerializeField] private float zoomDamping = 8f;        // 缩放阻尼（惯性），值越小惯性越大
-        [SerializeField] private float minZoomDistance = 5f;   // 最小缩放距离
-        [SerializeField] private float maxZoomDistance = 50f;  // 最大缩放距离
-        [SerializeField] private bool useHardLimit = false;    // 是否使用硬限制（true: 用户输入时直接限制，false: 越界后自动修正）
-        [SerializeField] private float clampDuration = 0.15f;  // 自动修正到限制范围的时间（秒）
+        [Tooltip("缩放速度系数：值越大缩放越快，建议范围 0.3-1.0")]
+        [SerializeField] private float zoomSpeed = 0.5f;
+        
+        [Tooltip("缩放阻尼值（惯性）：值越大惯性越小，建议范围 5-15")]
+        [SerializeField] private float zoomDamping = 8f;
+        
+        [Tooltip("最小缩放距离：相机能接近目标平面的最近距离")]
+        [SerializeField] private float minZoomDistance = 5f;
+        
+        [Tooltip("最大缩放距离：相机能远离目标平面的最远距离")]
+        [SerializeField] private float maxZoomDistance = 50f;
+        
+        [Tooltip("使用硬限制：开启后缩放时直接限制范围，关闭后允许越界后自动修正")]
+        [SerializeField] private bool useHardLimit = false;
+        
+        [Tooltip("自动修正力度：越界后自动修正的力度系数，值越大修正越快，建议范围 5-20")]
+        [SerializeField] private float clampStiffness = 10f;
 
         private Camera _camera;
         private Plane _targetPlane;     //正在追踪拍摄的目标平面
@@ -29,23 +42,19 @@ namespace UFramework
         private Vector2 _touchStartPos;        // 触摸开始时的位置（用于判断点击还是滑动）
         private Vector2 _oldPosition1;         // 上一帧双指第一指位置
         private Vector2 _oldPosition2;         // 上一帧双指第二指位置
-        private Vector2 _mouseStartPos;        // 鼠标开始时的位置（用于判断点击还是拖动）
+        private Vector2 _mouseStartPos;        // 鼠标按下时的位置（用于判断点击还是拖动）
+        private Vector2 _lastMousePosition;    // 上一帧鼠标位置（用于计算每帧移动量）
 
         // 惯性相关变量
         private Vector3 _panVelocity;          // 平移速度向量
         private float _zoomVelocity;          // 缩放速度
         private bool _isPanning;              // 是否正在平移
-        private bool _isZooming;               // 是否正在缩放
 
         private void Awake()
         {
             _camera = GetComponent<Camera>();
             //设定默认追踪的目标平面(x-z平面)
             SetTargetPlane(new Plane(Vector3.up, Vector3.zero));
-        }
-        private void OnDestroy()
-        {
-            _cameraTween?.Kill();
         }
         private void Update()
         {
@@ -68,7 +77,6 @@ namespace UFramework
                 {
                     // 三指及以上触摸，清除状态
                     _isPanning = false;
-                    _isZooming = false;
                 }
             }
             else
@@ -108,45 +116,42 @@ namespace UFramework
             }
             else if (touch.phase == TouchPhase.Moved)
             {
-                // 计算从触摸开始到现在的总移动距离
-                Vector2 totalDelta = touch.position - _touchStartPos;
-                float moveDistance = new Vector2(totalDelta.x / Screen.width, totalDelta.y / Screen.height).magnitude;
+                // 计算屏幕移动量（每帧）
+                Vector2 screenDelta = touch.position - _lastTouchPosition;
+                float frameMoveDistance = new Vector2(screenDelta.x / Screen.width, screenDelta.y / Screen.height).magnitude;
 
-                // 如果移动距离小于阈值，认为是点击，不移动相机
-                if (moveDistance < panThreshold)
+                // 如果每帧移动量太小，认为是抖动或停顿，更新位置但不移动相机
+                if (frameMoveDistance < 0.001f)
+                {
+                    _lastTouchPosition = touch.position;
                     return;
+                }
 
-                Vector2 deltaPosition = touch.position - _lastTouchPosition;  // 计算滑动距离（像素）
+                // 使用射线检测法：让目标平面上的点完全跟随指针移动
+                // 1. 从上一帧屏幕位置发射射线到目标平面，获取起始世界点
+                Ray startRay = _camera.ScreenPointToRay(_lastTouchPosition);
+                float startEnter;
+                if (_targetPlane.Raycast(startRay, out startEnter))
+                {
+                    Vector3 startPoint = startRay.GetPoint(startEnter);
 
-                // 计算摄像机实际视野范围（世界坐标）
-                float aspect = _camera.aspect;  // 屏幕宽高比
-                float halfFOVTan = Mathf.Tan((_camera.fieldOfView * 0.5f) * Mathf.Deg2Rad);  // 视野半角正切值
-                float distanceToPlane = GetDistanceToPlane(targetPlane);  // 相机到目标平面的实际距离
-                float height = distanceToPlane * halfFOVTan * 2;  // 视野高度
-                float width = height * aspect;  // 视野宽度
+                    // 2. 从当前屏幕位置发射射线到目标平面，获取目标世界点
+                    Ray endRay = _camera.ScreenPointToRay(touch.position);
+                    float endEnter;
+                    if (_targetPlane.Raycast(endRay, out endEnter))
+                    {
+                        Vector3 endPoint = endRay.GetPoint(endEnter);
 
-                // 获取目标平面的法向量和相机的右向量
-                Vector3 planeNormal = targetPlane.normal;
-                Vector3 cameraRight = transform.right;
+                        // 3. 计算世界空间移动量（平面上的两点距离）
+                        Vector3 worldMove = endPoint - startPoint;
 
-                // 将相机的右向量投影到目标平面
-                Vector3 rightOnPlane = Vector3.ProjectOnPlane(cameraRight, planeNormal).normalized;
+                        // 4. 反向移动相机，使起始点跟随指针移动到目标点
+                        Vector3 actualMove = -worldMove * panSpeed;
+                        transform.Translate(actualMove, Space.World);
 
-                // 计算相机的上向量（垂直于右向量和目标平面法向量）
-                Vector3 upOnPlane = Vector3.Cross(planeNormal, rightOnPlane).normalized;
-
-                // 根据屏幕滑动比例和视野范围计算移动方向
-                float horizontalAmount = -deltaPosition.x / Screen.width * width;  // 水平移动量
-                float verticalAmount = -deltaPosition.y / Screen.height * height;   // 垂直移动量
-
-                // 使用投影到目标平面的向量计算移动方向
-                Vector3 moveDirection = rightOnPlane * horizontalAmount + upOnPlane * verticalAmount;
-
-                // 直接移动相机并记录速度（用于惯性）
-                Vector3 actualMove = moveDirection * panSpeed;
-                transform.Translate(actualMove, Space.World);
-
-                _panVelocity = actualMove / Time.deltaTime;  // 记录瞬时速度
+                        _panVelocity = actualMove / Time.deltaTime;
+                    }
+                }
 
                 _lastTouchPosition = touch.position;
             }
@@ -174,7 +179,6 @@ namespace UFramework
                 _oldPosition1 = Input.GetTouch(0).position;
                 _oldPosition2 = Input.GetTouch(1).position;
                 _zoomVelocity = 0f;
-                _isZooming = true;
                 _isPanning = false;  // 双指操作时标记为不在平移，避免被误判为点击
                 return;
             }
@@ -270,7 +274,7 @@ namespace UFramework
         private void HandleMouseInput()
         {
             // 处理鼠标平移
-            if (UInput.GetKey(KeyName.cameraPan))
+            if (UInput.GetKey(OperationName.cameraPan))
             {
                 HandleMousePan(_targetPlane);
             }
@@ -279,11 +283,14 @@ namespace UFramework
                 _isPanning = false;
             }
 
-            // 处理鼠标缩放（滚轮）
-            float scroll = UInput.GetMouseScrollWheel();
-            if (Mathf.Abs(scroll) > 0.01f)
+            // 处理鼠标缩放（离散轴输入）
+            if (UInput.GetKeyDown(OperationName.cameraZoomIn))
             {
-                HandleMouseZoom(-scroll);
+                HandleMouseZoom(1f);
+            }
+            else if (UInput.GetKeyDown(OperationName.cameraZoomOut))
+            {
+                HandleMouseZoom(-1f);
             }
         }
         /// <summary>
@@ -292,9 +299,10 @@ namespace UFramework
         private void HandleMousePan(Plane targetPlane)
         {
             // 检测鼠标按下
-            if (Input.GetKeyDown(KeyCode.Mouse2))
+            if (UInput.GetKeyDown(OperationName.cameraPan))
             {
                 _mouseStartPos = Input.mousePosition;
+                _lastMousePosition = Input.mousePosition;
                 _panVelocity = Vector3.zero;
                 _isPanning = true;
                 return;
@@ -303,49 +311,58 @@ namespace UFramework
             // 鼠标移动处理
             if (_isPanning)
             {
-                float mouseX = Input.GetAxis("Mouse X");
-                float mouseY = Input.GetAxis("Mouse Y");
+                Vector2 currentMousePos = Input.mousePosition;
 
-                // 鼠标移动量太小时不处理
-                if (Mathf.Abs(mouseX) < 0.001f && Mathf.Abs(mouseY) < 0.001f)
+                // 计算屏幕移动量（每帧）
+                Vector2 screenDelta = currentMousePos - _lastMousePosition;
+                float frameMoveDistance = new Vector2(screenDelta.x / Screen.width, screenDelta.y / Screen.height).magnitude;
+
+                // 如果每帧移动量太小，认为是抖动或停顿，更新位置但不移动相机
+                if (frameMoveDistance < 0.001f)
+                {
+                    _lastMousePosition = currentMousePos;
                     return;
+                }
 
-                // 计算摄像机实际视野范围
-                float aspect = _camera.aspect;
-                float halfFOVTan = Mathf.Tan((_camera.fieldOfView * 0.5f) * Mathf.Deg2Rad);
-                float distanceToPlane = GetDistanceToPlane(targetPlane);
-                float height = distanceToPlane * halfFOVTan * 2;
-                float width = height * aspect;
+                // 使用射线检测法：让目标平面上的点完全跟随指针移动
+                // 1. 从上一帧屏幕位置发射射线到目标平面，获取起始世界点
+                Ray startRay = _camera.ScreenPointToRay(_lastMousePosition);
+                float startEnter;
+                if (_targetPlane.Raycast(startRay, out startEnter))
+                {
+                    Vector3 startPoint = startRay.GetPoint(startEnter);
 
-                // 获取目标平面的法向量和相机的右向量
-                Vector3 planeNormal = targetPlane.normal;
-                Vector3 cameraRight = transform.right;
+                    // 2. 从当前屏幕位置发射射线到目标平面，获取目标世界点
+                    Ray endRay = _camera.ScreenPointToRay(currentMousePos);
+                    float endEnter;
+                    if (_targetPlane.Raycast(endRay, out endEnter))
+                    {
+                        Vector3 endPoint = endRay.GetPoint(endEnter);
 
-                // 将相机的右向量投影到目标平面
-                Vector3 rightOnPlane = Vector3.ProjectOnPlane(cameraRight, planeNormal).normalized;
+                        // 3. 计算世界空间移动量（平面上的两点距离）
+                        Vector3 worldMove = endPoint - startPoint;
 
-                // 计算相机的上向量（垂直于右向量和目标平面法向量）
-                Vector3 upOnPlane = Vector3.Cross(planeNormal, rightOnPlane).normalized;
+                        // 4. 反向移动相机，使起始点跟随指针移动到目标点
+                        Vector3 actualMove = -worldMove * panSpeed;
+                        transform.Translate(actualMove, Space.World);
 
-                // 计算移动量
-                float horizontalAmount = -mouseX * panSpeed * width * 0.02f;
-                float verticalAmount = -mouseY * panSpeed * height * 0.02f;
+                        // 计算瞬时速度（用于惯性）
+                        _panVelocity = actualMove / Time.deltaTime;
+                    }
+                }
 
-                // 使用投影到目标平面的向量计算移动方向
-                Vector3 moveDirection = rightOnPlane * horizontalAmount + upOnPlane * verticalAmount;
-
-                // 直接移动相机并记录速度（用于惯性）
-                transform.Translate(moveDirection, Space.World);
-                _panVelocity = moveDirection / Time.deltaTime;
+                _lastMousePosition = currentMousePos;
             }
         }
         /// <summary>
-        /// 处理鼠标滚轮缩放
+        /// 处理鼠标滚轮缩放（离散）
         /// </summary>
-        private void HandleMouseZoom(float scroll)
+        /// <param name="direction">缩放方向：1 为放大，-1 为缩小</param>
+        private void HandleMouseZoom(float direction)
         {
-            // 计算缩放量
-            float delta = scroll * zoomSpeed * 10f;
+            // 计算缩放量（固定步长）
+            float currentDistance = GetDistanceToPlane(_targetPlane);
+            float delta = direction * zoomSpeed * currentDistance * 0.1f;
 
             // 沿相机前向量的反方向移动
             Vector3 zoomDirection = -transform.forward;
@@ -354,7 +371,6 @@ namespace UFramework
             if (useHardLimit)
             {
                 // 硬限制模式：直接限制移动范围
-                float currentDistance = GetDistanceToPlane(_targetPlane);
                 Vector3 newPosition = transform.position + moveVector;
                 float newDistanceToPlane = GetDistanceToPlane(_targetPlane, newPosition);
 
@@ -368,8 +384,7 @@ namespace UFramework
                 else
                 {
                     // 超出范围，限制到边界
-                    float clampedDelta = Mathf.Clamp(currentDistance + moveVector.magnitude * Mathf.Sign(Vector3.Dot(moveVector, zoomDirection)),
-                        minZoomDistance, maxZoomDistance) - currentDistance;
+                    float clampedDelta = Mathf.Clamp(currentDistance + delta, minZoomDistance, maxZoomDistance) - currentDistance;
                     transform.position += zoomDirection * clampedDelta;
                 }
             }
@@ -380,8 +395,6 @@ namespace UFramework
                 _zoomVelocity = Vector3.Project(moveVector, zoomDirection).magnitude / Time.deltaTime *
                     Mathf.Sign(Vector3.Dot(moveVector, zoomDirection));
             }
-
-            _isZooming = true;
         }
         /// <summary>
         /// 应用惯性效果
@@ -447,6 +460,7 @@ namespace UFramework
         }
         /// <summary>
         /// 检查并自动修正相机到目标平面的距离，确保在允许范围内
+        /// 使用基于弹簧力的物理修正机制
         /// </summary>
         private void CheckAndClampDistance()
         {
@@ -456,19 +470,42 @@ namespace UFramework
             // 检查是否超出范围
             if (currentDistance < minZoomDistance || currentDistance > maxZoomDistance)
             {
-                // 终止之前的修正动画
-                _cameraTween?.Kill();
+                // 计算目标距离（边界值）
+                float targetDistance = currentDistance < minZoomDistance ? minZoomDistance : maxZoomDistance;
 
-                // 计算目标距离
-                float targetDistance = Mathf.Clamp(currentDistance, minZoomDistance, maxZoomDistance);
-                float distanceDelta = targetDistance - currentDistance;
+                // 计算超出边界的距离
+                float exceedDistance = currentDistance < minZoomDistance
+                    ? minZoomDistance - currentDistance
+                    : currentDistance - maxZoomDistance;
 
-                // 沿相机前向量的反方向移动
+                // 计算修正力：超出越远，修正力越大
+                // 使用弹簧力公式：F = k * x，其中 k 是弹簧系数，x 是超出距离
+                float correctionForce = clampStiffness * exceedDistance;
+
+                // 将修正力转换为速度（考虑当前时间步长）
+                float correctionSpeed = correctionForce * Time.deltaTime;
+
+                // 沿相机前向量的反方向移动修正
                 Vector3 zoomDirection = -transform.forward;
-                Vector3 targetPosition = transform.position + zoomDirection * distanceDelta;
+                Vector3 correctionMove = zoomDirection * correctionSpeed;
 
-                // 使用 Ease.OutQuad 曲线平滑移动到目标位置
-                _cameraTween = transform.DOMove(targetPosition, clampDuration).SetEase(Ease.OutQuad);
+                // 对于超出上界的情况，需要反向移动
+                if (currentDistance > maxZoomDistance)
+                {
+                    correctionMove = -correctionMove;
+                }
+
+                // 应用修正移动
+                transform.position += correctionMove;
+
+                // 如果修正后仍在范围内，添加阻尼以避免震荡
+                float newDistance = GetDistanceToPlane(_targetPlane);
+                if (newDistance >= minZoomDistance && newDistance <= maxZoomDistance)
+                {
+                    // 在范围内时，添加额外的阻尼效果，使相机平稳停在边界
+                    Vector3 toBoundary = zoomDirection * (targetDistance - newDistance);
+                    transform.position += toBoundary * 0.5f;
+                }
             }
         }
     }
