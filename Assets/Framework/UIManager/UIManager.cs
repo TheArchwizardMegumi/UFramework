@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace UFramework
 {
-    public class UIManager : MonoBehaviour
+    public class UIManager : Singleton<UIManager>
     {
         /// <summary>
         /// 面板配置SO文件的引用
@@ -21,30 +21,7 @@ namespace UFramework
         /// </summary>
         private readonly Dictionary<PanelID, BasePanel> multiplePanelDict = new();
 
-        private static UIManager instance;
-        private static UIManager Instance
-        {
-            get
-            {
-                if (instance == null)
-                {
-                    Debug.LogError("试图在UIManager实例未初始化时访问该实例对象");
-                    instance = new GameObject("UIManager").AddComponent<UIManager>();
-                }
-
-                return instance;
-            }
-        }
-
-        private void Awake()
-        {
-            if (instance == null)
-            {
-                instance = this;
-            }
-        }
-
-        #region 私有面板管理方法
+        #region 面板管理方法
         private BasePanel CreatePanel(UIPanelType panelType, PanelID panelID)
         {
             //根据面板类型读取配置文件
@@ -118,7 +95,7 @@ namespace UFramework
         /// <summary>
         /// 获取指定类型的单例面板
         /// </summary>
-        private BasePanel GetInternal(UIPanelType panelType)
+        public BasePanel Get(UIPanelType panelType)
         {
             if (!panelConfig.config.TryGetValue(panelType, out PanelData data))
             {
@@ -150,7 +127,7 @@ namespace UFramework
         /// <summary>
         /// 获取指定ID的面板（单例或多例）
         /// </summary>
-        private BasePanel GetInternal(PanelID panelID)
+        public BasePanel Get(PanelID panelID)
         {
             if (!panelConfig.config.TryGetValue(panelID.Type, out PanelData data))
             {
@@ -183,7 +160,7 @@ namespace UFramework
         /// <summary>
         /// 尝试获取指定类型的单例面板
         /// </summary>
-        private bool TryGetInternal(UIPanelType panelType, out BasePanel panel)
+        public bool TryGet(UIPanelType panelType, out BasePanel panel)
         {
             panel = null;
             if (!panelConfig.config.TryGetValue(panelType, out PanelData data))
@@ -210,7 +187,7 @@ namespace UFramework
         /// <summary>
         /// 尝试获取指定ID的面板（单例或多例）
         /// </summary>
-        private bool TryGetInternal(PanelID panelID, out BasePanel panel)
+        public bool TryGet(PanelID panelID, out BasePanel panel)
         {
             panel = null;
             if (!panelConfig.config.TryGetValue(panelID.Type, out PanelData data))
@@ -236,14 +213,14 @@ namespace UFramework
         /// <summary>
         /// 获取指定面板组中顶层的可见面板
         /// </summary>
-        private BasePanel GetTopInternal(UIPanelGroup panelGroup) => panelGroup.GetTopPanel();
+        public BasePanel GetTop(UIPanelGroup panelGroup) => panelGroup.GetTopPanel();
         /// <summary>
         /// 手动指定面板ID并将面板推入指定面板组的顶层，并可选择是否显示
         /// </summary>
         /// <param name="isShow">是否在推入后调用面板的Show()方法</param>
         /// <param name="isActiveOnPush">是否在创建面板时立刻为active状态</param>
         /// <returns></returns>
-        private async UniTask<BasePanel> PushInternal(UIPanelType panelType, UIPanelGroup panelGroup, PanelID panelID, bool isShow = true)
+        public async UniTask<BasePanel> Push(UIPanelType panelType, UIPanelGroup panelGroup, PanelID panelID, bool isShow = true)
         {
             if (!panelConfig.config.TryGetValue(panelType, out PanelData data))
             {
@@ -292,7 +269,7 @@ namespace UFramework
         /// <summary>
         /// 将面板推入指定面板组的顶层，并可选择是否显示（自动生成ID）
         /// </summary>
-        private async UniTask<BasePanel> PushInternal(UIPanelType panelType, UIPanelGroup panelGroup, bool isShow = true)
+        public async UniTask<BasePanel> Push(UIPanelType panelType, UIPanelGroup panelGroup, bool isShow = true)
         {
             if (!panelConfig.config.TryGetValue(panelType, out PanelData data))
             {
@@ -317,7 +294,7 @@ namespace UFramework
         /// <summary>
         /// 隐藏指定类型的单例面板
         /// </summary>
-        private async UniTask HideInternal(UIPanelType panelType)
+        public async UniTask Hide(UIPanelType panelType)
         {
             if (!panelConfig.config.TryGetValue(panelType, out PanelData data))
             {
@@ -340,7 +317,7 @@ namespace UFramework
         /// <summary>
         /// 隐藏指定ID的面板
         /// </summary>
-        private async UniTask HideInternal(PanelID panelID)
+        public async UniTask Hide(PanelID panelID)
         {
             if (!panelConfig.config.TryGetValue(panelID.Type, out PanelData data))
             {
@@ -363,12 +340,12 @@ namespace UFramework
         /// <summary>
         /// 隐藏指定面板组的顶层可见面板
         /// </summary>
-        private async UniTask HideTopInternal(UIPanelGroup panelGroup) => await panelGroup.HideTopPanel();
+        public async UniTask HideTop(UIPanelGroup panelGroup) => await panelGroup.HideTopPanel();
         /// <summary>
         /// 销毁指定类型的单例面板
         /// </summary>
         /// <param name="waitUntilHidden">是否等待面板隐藏后再销毁</param>
-        private async UniTask DestroyInternal(UIPanelType panelType, bool waitUntilHidden)
+        public async UniTask Destroy(UIPanelType panelType, bool waitUntilHidden)
         {
             if (!panelConfig.config.TryGetValue(panelType, out PanelData data))
             {
@@ -392,7 +369,7 @@ namespace UFramework
         /// 销毁指定ID的面板
         /// </summary>
         /// <param name="waitUntilHidden">是否等待面板隐藏后再销毁</param>
-        private async UniTask DestroyInternal(PanelID panelID, bool waitUntilHidden)
+        public async UniTask Destroy(PanelID panelID, bool waitUntilHidden)
         {
             if (!panelConfig.config.TryGetValue(panelID.Type, out PanelData data))
             {
@@ -416,68 +393,7 @@ namespace UFramework
         /// 销毁指定面板组的顶层可见面板
         /// </summary>
         /// <param name="waitUntilHidden">是否等待面板隐藏后再销毁</param>
-        private async UniTask DestroyTopInternal(UIPanelGroup panelGroup, bool waitUntilHidden) => await panelGroup.DestroyTopPanel(waitUntilHidden);
-        #endregion
-
-        #region 公共静态方法
-        /// <summary>
-        /// 获取指定类型的单例面板
-        /// </summary>
-        public static BasePanel Get(UIPanelType panelType) => Instance.GetInternal(panelType);
-        /// <summary>
-        /// 获取指定ID的面板（单例或多例）
-        /// </summary>
-        public static BasePanel Get(PanelID panelID) => Instance.GetInternal(panelID);
-        /// <summary>
-        /// 尝试获取指定类型的单例面板
-        /// </summary>
-        public static bool TryGet(UIPanelType panelType, out BasePanel panel) => Instance.TryGetInternal(panelType, out panel);
-        /// <summary>
-        /// 尝试获取指定ID的面板（单例或多例）
-        /// </summary>
-        public static bool TryGet(PanelID panelID, out BasePanel panel) => Instance.TryGetInternal(panelID, out panel);
-        /// <summary>
-        /// 获取指定面板组中顶层的可见面板
-        /// </summary>
-        public static BasePanel GetTop(UIPanelGroup panelGroup) => Instance.GetTopInternal(panelGroup);
-        /// <summary>
-        /// 手动指定面板ID并将面板推入指定面板组的顶层，并可选择是否显示
-        /// </summary>
-        /// <param name="isShow">是否在推入后调用面板的Show()方法</param>
-        /// <param name="isActiveOnPush">是否在创建面板时立刻为active状态</param>
-        /// <returns></returns>
-        public static async UniTask<BasePanel> Push(UIPanelType panelType, UIPanelGroup panelGroup, PanelID panelID, bool isShow = true) => await Instance.PushInternal(panelType, panelGroup, panelID, isShow);
-        /// <summary>
-        /// 将面板推入指定面板组的顶层，并可选择是否显示（自动生成ID）
-        /// </summary>
-        public static async UniTask<BasePanel> Push(UIPanelType panelType, UIPanelGroup panelGroup, bool isShow = true) => await Instance.PushInternal(panelType, panelGroup, isShow);
-        /// <summary>
-        /// 隐藏指定类型的单例面板
-        /// </summary>
-        public static async UniTask Hide(UIPanelType panelType) => await Instance.HideInternal(panelType);
-        /// <summary>
-        /// 隐藏指定ID的面板
-        /// </summary>
-        public static async UniTask Hide(PanelID panelID) => await Instance.HideInternal(panelID);
-        /// <summary>
-        /// 隐藏指定面板组的顶层可见面板
-        /// </summary>
-        public static async UniTask HideTop(UIPanelGroup panelGroup) => await Instance.HideTopInternal(panelGroup);
-        /// <summary>
-        /// 销毁指定类型的单例面板
-        /// </summary>
-        /// <param name="waitUntilHidden">是否等待面板隐藏后再销毁</param>
-        public static async UniTask Destroy(UIPanelType panelType, bool waitUntilHidden) => await Instance.DestroyInternal(panelType, waitUntilHidden);
-        /// <summary>
-        /// 销毁指定ID的面板
-        /// </summary>
-        /// <param name="waitUntilHidden">是否等待面板隐藏后再销毁</param>
-        public static async UniTask Destroy(PanelID panelID, bool waitUntilHidden) => await Instance.DestroyInternal(panelID, waitUntilHidden);
-        /// <summary>
-        /// 销毁指定面板组的顶层可见面板
-        /// </summary>
-        /// <param name="waitUntilHidden">是否等待面板隐藏后再销毁</param>
-        public static async UniTask DestroyTop(UIPanelGroup panelGroup, bool waitUntilHidden) => await Instance.DestroyTopInternal(panelGroup, waitUntilHidden);
+        public async UniTask DestroyTop(UIPanelGroup panelGroup, bool waitUntilHidden) => await panelGroup.DestroyTopPanel(waitUntilHidden);
         #endregion
     }
 }
